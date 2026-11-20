@@ -1,0 +1,261 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global default-deny safety net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // --- GLOBAL PRIMITIVE HELPERS ---
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidRoomCode(code) {
+      return code is string && code.size() >= 4 && code.size() <= 12 && code.matches('^[A-Z0-9]+$');
+    }
+
+    // --- ENTITY VALIDATION BLUEPRINTS ---
+
+    function isValidUserProfile(data, uid) {
+      return data.keys().hasAll(['userId', 'displayName', 'wins', 'gamesPlayed', 'createdAt', 'updatedAt']) &&
+             data.keys().hasOnly(['userId', 'displayName', 'wins', 'gamesPlayed', 'createdAt', 'updatedAt']) &&
+             data.userId is string && data.userId == uid && data.userId.size() <= 128 &&
+             data.displayName is string && data.displayName.size() >= 1 && data.displayName.size() <= 40 &&
+             data.wins is int && data.wins >= 0 && data.wins <= 1000000 &&
+             data.gamesPlayed is int && data.gamesPlayed >= 0 && data.gamesPlayed <= 1000000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidLobbyConsistency(data) {
+      return (data.status == 'WAITING' && data.publicLobby == true && data.lobbyKey == 'PUBLIC_WAITING') ||
+             (data.status == 'WAITING' && data.publicLobby == false && data.lobbyKey == 'PRIVATE_WAITING') ||
+             (data.status == 'PLAYING' && data.lobbyKey == 'PLAYING') ||
+             (data.status == 'FINISHED' && data.lobbyKey == 'FINISHED');
+    }
+
+    function isValidRoom(data, roomId) {
+      return data.keys().hasAll([
+               'roomCode', 'roomName', 'hostUid', 'publicLobby', 'status', 'lobbyKey',
+               'memberUids', 'seatUids', 'seatNames', 'seatBotFlags', 'tokens',
+               'currentTurnSeat', 'diceValue', 'turnPhase', 'consecutiveSixes',
+               'winnerSeat', 'lastEventText', 'voiceEnabled', 'createdAt', 'updatedAt'
+             ]) &&
+             data.keys().hasOnly([
+               'roomCode', 'roomName', 'hostUid', 'publicLobby', 'status', 'lobbyKey',
+               'memberUids', 'seatUids', 'seatNames', 'seatBotFlags', 'tokens',
+               'currentTurnSeat', 'diceValue', 'turnPhase', 'consecutiveSixes',
+               'winnerSeat', 'lastEventText', 'voiceEnabled', 'createdAt', 'updatedAt'
+             ]) &&
+             isValidRoomCode(data.roomCode) && data.roomCode == roomId &&
+             data.roomName is string && data.roomName.size() >= 1 && data.roomName.size() <= 40 &&
+             data.hostUid is string && data.hostUid.size() >= 1 && data.hostUid.size() <= 128 &&
+             data.publicLobby is bool &&
+             data.status in ['WAITING', 'PLAYING', 'FINISHED'] &&
+             data.lobbyKey in ['PUBLIC_WAITING', 'PRIVATE_WAITING', 'PLAYING', 'FINISHED'] &&
+             isValidLobbyConsistency(data) &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 4 &&
+             data.memberUids[0] is string &&
+             data.hostUid in data.memberUids &&
+             data.seatUids is list && data.seatUids.size() == 4 && data.seatUids[0] is string &&
+             data.seatNames is list && data.seatNames.size() == 4 && data.seatNames[0] is string &&
+             data.seatBotFlags is list && data.seatBotFlags.size() == 4 && data.seatBotFlags[0] is bool &&
+             data.tokens is list && data.tokens.size() == 16 && data.tokens[0] is int &&
+             data.currentTurnSeat is int && data.currentTurnSeat >= 0 && data.currentTurnSeat <= 3 &&
+             data.diceValue is int && data.diceValue >= 0 && data.diceValue <= 6 &&
+             data.turnPhase in ['ROLL', 'MOVE', 'FINISHED'] &&
+             data.consecutiveSixes is int && data.consecutiveSixes >= 0 && data.consecutiveSixes <= 3 &&
+             data.winnerSeat is int && data.winnerSeat >= -1 && data.winnerSeat <= 3 &&
+             data.lastEventText is string && data.lastEventText.size() <= 160 &&
+             data.voiceEnabled is bool &&
+             data.createdAt is timestamp && data.createdAt <= request.time &&
+             data.updatedAt is timestamp && data.updatedAt <= request.time;
+    }
+
+    function isValidVoicePacket(data, roomId) {
+      return data.keys().hasAll([
+               'roomId', 'senderUid', 'senderName', 'senderSeat', 'memberUids',
+               'audioBase64', 'durationMs', 'sampleRate', 'createdAt'
+             ]) &&
+             data.keys().hasOnly([
+               'roomId', 'senderUid', 'senderName', 'senderSeat', 'memberUids',
+               'audioBase64', 'durationMs', 'sampleRate', 'createdAt'
+             ]) &&
+             data.roomId is string && data.roomId == roomId && data.roomId.size() <= 12 &&
+             data.senderUid is string && data.senderUid == request.auth.uid && data.senderUid.size() <= 128 &&
+             data.senderName is string && data.senderName.size() >= 1 && data.senderName.size() <= 40 &&
+             data.senderSeat is int && data.senderSeat >= 0 && data.senderSeat <= 3 &&
+             data.memberUids is list && data.memberUids.size() >= 1 && data.memberUids.size() <= 4 &&
+             data.memberUids[0] is string &&
+             request.auth.uid in data.memberUids &&
+             data.audioBase64 is string && data.audioBase64.size() >= 8 && data.audioBase64.size() <= 120000 &&
+             data.durationMs is int && data.durationMs >= 150 && data.durationMs <= 8000 &&
+             data.sampleRate is int && data.sampleRate == 8000 &&
+             data.createdAt is timestamp && data.createdAt <= request.time;
+    }
+
+    // --- ROOM ACTION PREDICATES ---
+
+    function isJoinRoomAction() {
+      return existing().status == 'WAITING' &&
+             incoming().status == 'WAITING' &&
+             !(request.auth.uid in existing().memberUids) &&
+             (request.auth.uid in incoming().memberUids) &&
+             incoming().memberUids.size() == existing().memberUids.size() + 1 &&
+             incoming().memberUids.hasAll(existing().memberUids) &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'memberUids', 'seatUids', 'seatNames', 'seatBotFlags', 'lastEventText', 'updatedAt'
+             ]);
+    }
+
+    function isLeaveWaitingRoomAction() {
+      return existing().status == 'WAITING' &&
+             incoming().status == 'WAITING' &&
+             request.auth.uid != existing().hostUid &&
+             (request.auth.uid in existing().memberUids) &&
+             !(request.auth.uid in incoming().memberUids) &&
+             incoming().memberUids.size() == existing().memberUids.size() - 1 &&
+             existing().memberUids.hasAll(incoming().memberUids) &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'memberUids', 'seatUids', 'seatNames', 'seatBotFlags', 'lastEventText', 'updatedAt'
+             ]);
+    }
+
+    function isStartGameAction() {
+      return existing().status == 'WAITING' &&
+             incoming().status == 'PLAYING' &&
+             request.auth.uid == existing().hostUid &&
+             incoming().memberUids == existing().memberUids &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'status', 'lobbyKey', 'seatUids', 'seatNames', 'seatBotFlags',
+               'currentTurnSeat', 'diceValue', 'turnPhase', 'consecutiveSixes',
+               'lastEventText', 'updatedAt'
+             ]);
+    }
+
+    function isPlayTurnAction() {
+      return existing().status == 'PLAYING' &&
+             incoming().status in ['PLAYING', 'FINISHED'] &&
+             (request.auth.uid in existing().memberUids) &&
+             (
+               existing().seatUids[existing().currentTurnSeat] == request.auth.uid ||
+               (existing().seatBotFlags[existing().currentTurnSeat] == true && request.auth.uid == existing().hostUid)
+             ) &&
+             incoming().memberUids == existing().memberUids &&
+             incoming().seatUids == existing().seatUids &&
+             incoming().seatNames == existing().seatNames &&
+             incoming().seatBotFlags == existing().seatBotFlags &&
+             incoming().diff(existing()).affectedKeys().hasOnly([
+               'tokens', 'currentTurnSeat', 'diceValue', 'turnPhase', 'consecutiveSixes',
+               'winnerSeat', 'status', 'lobbyKey', 'lastEventText', 'updatedAt'
+             ]);
+    }
+
+    // --- COLLECTION RULES ---
+
+    match /users/{userId} {
+      allow get: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+      allow list: if isSignedIn() && resource.data.userId == request.auth.uid;
+
+      allow create: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming(), userId);
+
+      allow update: if isSignedIn() &&
+                       isValidId(userId) &&
+                       request.auth.uid == userId &&
+                       isValidUserProfile(incoming(), userId) &&
+                       incoming().userId == existing().userId &&
+                       incoming().createdAt == existing().createdAt &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['displayName', 'wins', 'gamesPlayed', 'updatedAt']);
+
+      allow delete: if isSignedIn() && isValidId(userId) && request.auth.uid == userId;
+    }
+
+    match /rooms/{roomId} {
+      allow get: if isSignedIn() &&
+                    isValidRoomCode(roomId) &&
+                    (request.auth.uid in existing().memberUids || existing().status == 'WAITING');
+
+      allow list: if isSignedIn() &&
+                     (request.auth.uid in resource.data.memberUids || resource.data.lobbyKey == 'PUBLIC_WAITING');
+
+      allow create: if isSignedIn() &&
+                       isValidRoomCode(roomId) &&
+                       isValidRoom(incoming(), roomId) &&
+                       incoming().hostUid == request.auth.uid &&
+                       incoming().status == 'WAITING' &&
+                       incoming().memberUids.size() == 1 &&
+                       incoming().memberUids[0] == request.auth.uid &&
+                       incoming().seatUids[0] == request.auth.uid &&
+                       incoming().winnerSeat == -1 &&
+                       incoming().diceValue == 0 &&
+                       incoming().turnPhase == 'ROLL';
+
+      allow update: if isSignedIn() &&
+                       isValidRoomCode(roomId) &&
+                       isValidRoom(incoming(), roomId) &&
+                       existing().status != 'FINISHED' &&
+                       incoming().hostUid == existing().hostUid &&
+                       incoming().roomCode == existing().roomCode &&
+                       incoming().roomName == existing().roomName &&
+                       incoming().publicLobby == existing().publicLobby &&
+                       incoming().voiceEnabled == existing().voiceEnabled &&
+                       incoming().createdAt == existing().createdAt &&
+                       (
+                         isJoinRoomAction() ||
+                         isLeaveWaitingRoomAction() ||
+                         isStartGameAction() ||
+                         isPlayTurnAction()
+                       );
+
+      allow delete: if isSignedIn() &&
+                       isValidRoomCode(roomId) &&
+                       existing().hostUid == request.auth.uid;
+
+      match /voice_packets/{packetId} {
+        allow get: if isSignedIn() &&
+                      isValidRoomCode(roomId) &&
+                      isValidId(packetId) &&
+                      (request.auth.uid in existing().memberUids);
+
+        allow list: if isSignedIn() &&
+                       (request.auth.uid in resource.data.memberUids);
+
+        allow create: if isSignedIn() &&
+                         isValidRoomCode(roomId) &&
+                         isValidId(packetId) &&
+                         isValidVoicePacket(incoming(), roomId) &&
+                         exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+                         (request.auth.uid in get(/databases/$(database)/documents/rooms/$(roomId)).data.memberUids) &&
+                         incoming().memberUids == get(/databases/$(database)/documents/rooms/$(roomId)).data.memberUids;
+
+        allow update: if false;
+
+        allow delete: if isSignedIn() &&
+                         isValidRoomCode(roomId) &&
+                         isValidId(packetId) &&
+                         (
+                           existing().senderUid == request.auth.uid ||
+                           (exists(/databases/$(database)/documents/rooms/$(roomId)) &&
+                            get(/databases/$(database)/documents/rooms/$(roomId)).data.hostUid == request.auth.uid)
+                         );
+      }
+    }
+  }
+}

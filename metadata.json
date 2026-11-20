@@ -1,0 +1,6 @@
+{
+  "name": "منچ کلاسیک",
+  "description": "بازی منچ ۴ نفره آنلاین با صفحه کلاسیک قدیمی و چت صوتی درون بازی",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

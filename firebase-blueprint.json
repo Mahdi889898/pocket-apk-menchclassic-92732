@@ -1,0 +1,234 @@
+{
+  "entities": {
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "Private player profile and lifetime Mensch game statistics.",
+      "type": "object",
+      "properties": {
+        "userId": {
+          "type": "string",
+          "description": "Firebase Auth UID of the player."
+        },
+        "displayName": {
+          "type": "string",
+          "description": "Player display nickname shown on the board."
+        },
+        "wins": {
+          "type": "integer",
+          "description": "Total Mensch matches won."
+        },
+        "gamesPlayed": {
+          "type": "integer",
+          "description": "Total Mensch matches played."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Profile creation timestamp (submitted via FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last update timestamp (submitted via FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "userId",
+        "displayName",
+        "wins",
+        "gamesPlayed",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "GameRoom": {
+      "title": "GameRoom",
+      "description": "A 4-player online classic Persian Mensch game room with real-time board state.",
+      "type": "object",
+      "properties": {
+        "roomCode": {
+          "type": "string",
+          "description": "Unique 6-character uppercase code matching the room document ID."
+        },
+        "roomName": {
+          "type": "string",
+          "description": "Display title of the room."
+        },
+        "hostUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the room creator."
+        },
+        "publicLobby": {
+          "type": "boolean",
+          "description": "Whether the room is discoverable in the public waiting lobby."
+        },
+        "status": {
+          "type": "string",
+          "enum": ["WAITING", "PLAYING", "FINISHED"],
+          "description": "Lifecycle status of the match."
+        },
+        "lobbyKey": {
+          "type": "string",
+          "enum": ["PUBLIC_WAITING", "PRIVATE_WAITING", "PLAYING", "FINISHED"],
+          "description": "Single-field index key derived from status and publicLobby for secure lobby listing."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "List of 1 to 4 authenticated human player UIDs currently in the room."
+        },
+        "seatUids": {
+          "type": "array",
+          "description": "Fixed 4-element list mapping seat 0..3 to player UID, BOT_1..3, or empty string."
+        },
+        "seatNames": {
+          "type": "array",
+          "description": "Fixed 4-element list of seat player display names."
+        },
+        "seatBotFlags": {
+          "type": "array",
+          "description": "Fixed 4-element boolean list indicating whether each seat is controlled by a bot."
+        },
+        "tokens": {
+          "type": "array",
+          "description": "Fixed 16-element integer array representing progress (-1..43) of 4 pawns per seat."
+        },
+        "currentTurnSeat": {
+          "type": "integer",
+          "description": "Index (0..3) of the seat whose turn it currently is."
+        },
+        "diceValue": {
+          "type": "integer",
+          "description": "Current die face (0 if not rolled yet, 1..6 after roll)."
+        },
+        "turnPhase": {
+          "type": "string",
+          "enum": ["ROLL", "MOVE", "FINISHED"],
+          "description": "Sub-phase of the active turn."
+        },
+        "consecutiveSixes": {
+          "type": "integer",
+          "description": "Count of consecutive sixes rolled in the current turn (0..3)."
+        },
+        "winnerSeat": {
+          "type": "integer",
+          "description": "Winning seat index (0..3), or -1 while match is ongoing."
+        },
+        "lastEventText": {
+          "type": "string",
+          "description": "Localized Persian description of the most recent game event."
+        },
+        "voiceEnabled": {
+          "type": "boolean",
+          "description": "Whether in-game voice chat is enabled for this room."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Room creation timestamp (submitted via FieldValue.serverTimestamp())."
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last state update timestamp (submitted via FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "roomCode",
+        "roomName",
+        "hostUid",
+        "publicLobby",
+        "status",
+        "lobbyKey",
+        "memberUids",
+        "seatUids",
+        "seatNames",
+        "seatBotFlags",
+        "tokens",
+        "currentTurnSeat",
+        "diceValue",
+        "turnPhase",
+        "consecutiveSixes",
+        "winnerSeat",
+        "lastEventText",
+        "voiceEnabled",
+        "createdAt",
+        "updatedAt"
+      ]
+    },
+    "VoicePacket": {
+      "title": "VoicePacket",
+      "description": "Compressed G.711 mu-law voice audio packet broadcast inside an active Mensch room.",
+      "type": "object",
+      "properties": {
+        "roomId": {
+          "type": "string",
+          "description": "Parent room document ID."
+        },
+        "senderUid": {
+          "type": "string",
+          "description": "Firebase Auth UID of the speaker."
+        },
+        "senderName": {
+          "type": "string",
+          "description": "Display name of the speaker."
+        },
+        "senderSeat": {
+          "type": "integer",
+          "description": "Board seat index (0..3) of the speaker."
+        },
+        "memberUids": {
+          "type": "array",
+          "description": "Denormalized list of room member UIDs authorized to listen to this voice packet."
+        },
+        "audioBase64": {
+          "type": "string",
+          "description": "Base64-encoded 8kHz G.711 mu-law audio payload."
+        },
+        "durationMs": {
+          "type": "integer",
+          "description": "Audio packet duration in milliseconds."
+        },
+        "sampleRate": {
+          "type": "integer",
+          "description": "PCM sample rate in Hz (8000)."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Packet broadcast timestamp (submitted via FieldValue.serverTimestamp())."
+        }
+      },
+      "required": [
+        "roomId",
+        "senderUid",
+        "senderName",
+        "senderSeat",
+        "memberUids",
+        "audioBase64",
+        "durationMs",
+        "sampleRate",
+        "createdAt"
+      ]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": {
+        "$ref": "#/entities/UserProfile"
+      },
+      "description": "Private per-user profile and game statistics."
+    },
+    "/rooms/{roomId}": {
+      "schema": {
+        "$ref": "#/entities/GameRoom"
+      },
+      "description": "4-player online classic Mensch rooms and synchronized board state."
+    },
+    "/rooms/{roomId}/voice_packets/{packetId}": {
+      "schema": {
+        "$ref": "#/entities/VoicePacket"
+      },
+      "description": "Real-time voice chat packets scoped to members of the parent room."
+    }
+  }
+}
